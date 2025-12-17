@@ -1,4 +1,5 @@
 import os
+import subprocess
 
 # The decky plugin module is located at decky-loader/plugin
 # For easy intellisense checkout the decky-loader code repo
@@ -20,6 +21,9 @@ class Plugin:
     async def _main(self):
         self.loop = asyncio.get_event_loop()
         decky.logger.info("Hello World!")
+
+        # start speaker in background
+        subprocess.Popen(["/home/lukas/.cargo/bin/librespot", "-n", "Librespot Speaker", "-b", "320"]) 
 
     # Function called first during the unload process, utilize this to handle your plugin being stopped, but not
     # completely removed
