@@ -11,3 +11,5 @@ arch pacakges
 ```bash
 sudo pacman -S base-devel alsa-lib
 ```
+
+For the steam deck you can just copy the already built binary if you already have it and it will work, the steam already has the neccesarry packages
