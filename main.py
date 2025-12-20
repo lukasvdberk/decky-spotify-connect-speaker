@@ -11,13 +11,35 @@ import asyncio
 LIBRESPOT_BIN = "/home/deck/librespot"
 LIBRESPOT_SPEAKER_NAME="decky"
 class Plugin:
+    librespot_process = None
     async def long_running(self):
-        # Passing through a bunch of random data, just as an example
-        await decky.emit("timer_event", "Hello from the backend!", True, 2)
-
         decky.logger.info("Attempting to start librespot")
-        # start speaker in background
-        subprocess.Popen([LIBRESPOT_BIN, "-n", LIBRESPOT_SPEAKER_NAME, "-b", "320"]) 
+        await decky.emit("timer_event", "Starting librespot....", True, 2)
+
+        # start speaker in background and capture output
+        librespot_process = subprocess.Popen(
+            [LIBRESPOT_BIN, "-n", LIBRESPOT_SPEAKER_NAME, "-b", "320"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=1
+        )
+
+        # TODO maybe emit to frontend eventually?
+        # Read and display output in real-time
+        # try:
+        #     for line in librespot_process.stdout:
+        #         print(f"STDOUT: {line.rstrip()}")
+        #     for line in librespot_process.stderr:
+        #         print(f"STDERR: {line.rstrip()}")
+        # except KeyboardInterrupt:
+        #     print("Interrupted, shutting down...")
+        # finally:
+        #     process.terminate()
+        #     try:
+        #         process.wait(timeout=5)
+        #     except subprocess.TimeoutExpired:
+        #         process.kill()
 
     # Asyncio-compatible long-running code, executed in a task when the plugin is loaded
     async def _main(self):
@@ -27,10 +49,14 @@ class Plugin:
     # Function called first during the unload process, utilize this to handle your plugin being stopped, but not
     # completely removed
     async def _unload(self):
-        decky.logger.info("Goodnight World!")
+        decky.logger.info("Stopping plugin, trying to kill speaker")
 
-        # TODO add the stopping of librespot
-        pass
+        if librespot is not None:
+            librespot_process.terminate()
+            try:
+                librespot_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                librespot_process.kill()
 
     # Function called after `_unload` during uninstall, utilize this to clean up processes and other remnants of your
     # plugin that may remain on the system

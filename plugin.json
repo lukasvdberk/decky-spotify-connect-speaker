@@ -1,5 +1,5 @@
 {
-  "name": "Example Plugin",
+  "name": "Spotify connect speaker",
   "author": "John Doe",
   "flags": ["debug", "_root"],
   "api_version": 1,
