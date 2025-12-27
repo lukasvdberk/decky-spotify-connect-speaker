@@ -1,12 +1,24 @@
 import os
+import pwd
 import decky
 import asyncio
 from pathlib import Path
 
-LIBRESPOT_BIN = "/home/deck/librespot"
+# Get Decky environment variables with fallbacks
+DECKY_USER = os.environ.get("DECKY_USER", "deck")
+DECKY_USER_HOME = os.environ.get("DECKY_USER_HOME", "/home/deck")
+
+# Get UID from username using pwd module
+try:
+    DECKY_USER_UID = pwd.getpwnam(DECKY_USER).pw_uid
+except KeyError:
+    DECKY_USER_UID = 1000  # fallback to default deck UID
+
+# Plugin configuration using Decky's environment
+LIBRESPOT_BIN = f"{DECKY_USER_HOME}/librespot"
 LIBRESPOT_SPEAKER_NAME = "decky-spotify"
 SERVICE_NAME = "decky-librespot.service"
-SYSTEMD_USER_DIR = Path.home() / ".config" / "systemd" / "user"
+SYSTEMD_USER_DIR = Path(DECKY_USER_HOME) / ".config" / "systemd" / "user"
 
 class Plugin:
     def __init__(self):
@@ -59,11 +71,11 @@ WantedBy=default.target
         env.pop("LD_PRELOAD", None)
 
         # Decky runs as a system service, so user session variables may be missing
-        # Set them explicitly for the deck user (UID 1000)
+        # Set them explicitly using the UID derived from DECKY_USER
         if "XDG_RUNTIME_DIR" not in env:
-            env["XDG_RUNTIME_DIR"] = "/run/user/1000"
+            env["XDG_RUNTIME_DIR"] = f"/run/user/{DECKY_USER_UID}"
         if "DBUS_SESSION_BUS_ADDRESS" not in env:
-            env["DBUS_SESSION_BUS_ADDRESS"] = "unix:path=/run/user/1000/bus"
+            env["DBUS_SESSION_BUS_ADDRESS"] = f"unix:path=/run/user/{DECKY_USER_UID}/bus"
 
         return env
 
