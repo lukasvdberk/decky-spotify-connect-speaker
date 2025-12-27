@@ -77,7 +77,7 @@ const Content: FC = () => {
       if (success) {
         toaster.toast({
           title: "Success",
-          body: status.running ? "Service stopped" : "Service started"
+          body: status.running ? "Spotify speaker stopped" : "Spotify speaker started"
         });
         await refreshStatus();
       } else {
@@ -136,7 +136,7 @@ const Content: FC = () => {
       if (success) {
         toaster.toast({
           title: "Success",
-          body: "Service restarted"
+          body: "Spotify speaker restarted"
         });
         await refreshStatus();
       } else {
