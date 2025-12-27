@@ -8,6 +8,8 @@ import {
   staticClasses
 } from "@decky/ui";
 import {
+  addEventListener,
+  removeEventListener,
   callable,
   definePlugin,
   toaster
@@ -62,6 +64,9 @@ const Content: FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [nowPlaying, setNowPlaying] = useState<NowPlayingState | null>(null);
 
+  // Local position tracking (simulates playback progress between events)
+  const [displayPosition, setDisplayPosition] = useState<number>(0);
+
   // Operation-specific loading states
   const [isToggling, setIsToggling] = useState<boolean>(false);
   const [isTogglingAutostart, setIsTogglingAutostart] = useState<boolean>(false);
@@ -91,26 +96,50 @@ const Content: FC = () => {
     loadInitialStatus();
   }, []);
 
-  // Poll for now playing state when service is running
+  // Subscribe to now playing updates when service is running
   useEffect(() => {
     if (!status?.running) {
       setNowPlaying(null);
       return;
     }
 
-    const poll = async () => {
-      try {
-        const np = await getNowPlaying();
-        setNowPlaying(np);
-      } catch (e) {
-        console.error("Failed to get now playing:", e);
-      }
-    };
+    // Fetch initial state
+    getNowPlaying().then(setNowPlaying).catch(console.error);
 
-    poll(); // Initial fetch
-    const interval = setInterval(poll, 2000);
-    return () => clearInterval(interval);
+    // Listen for real-time updates from backend
+    const listener = addEventListener<[NowPlayingState]>(
+      "now_playing",
+      (state) => setNowPlaying(state)
+    );
+
+    return () => removeEventListener("now_playing", listener);
   }, [status?.running]);
+
+  // Simulate playback position progression
+  useEffect(() => {
+    // Sync position when nowPlaying updates
+    if (nowPlaying) {
+      setDisplayPosition(nowPlaying.position_ms);
+    }
+  }, [nowPlaying?.position_ms]);
+
+  // Timer to increment position while playing
+  useEffect(() => {
+    if (nowPlaying?.playback_state !== "playing" || !nowPlaying?.track) {
+      return;
+    }
+
+    const interval = setInterval(() => {
+      setDisplayPosition((prev) => {
+        const newPos = prev + 1000;
+        // Cap at track duration
+        const duration = nowPlaying.track?.duration_ms || 0;
+        return newPos > duration ? duration : newPos;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [nowPlaying?.playback_state, nowPlaying?.track]);
 
   // Start/Stop handler
   const handleToggleService = async () => {
@@ -267,7 +296,7 @@ const Content: FC = () => {
             </PanelSectionRow>
             {/* Progress bar and time */}
             <PanelSectionRow>
-              <div style={{ width: "100%" }}>
+              <div style={{ width: "100%", paddingRight: "16px" }}>
                 {/* Playback state indicator */}
                 <div style={{
                   display: "flex",
@@ -293,7 +322,7 @@ const Content: FC = () => {
                   overflow: "hidden"
                 }}>
                   <div style={{
-                    width: `${(nowPlaying.position_ms / (nowPlaying.track?.duration_ms || 1)) * 100}%`,
+                    width: `${(displayPosition / (nowPlaying.track?.duration_ms || 1)) * 100}%`,
                     height: "100%",
                     backgroundColor: "#1DB954",
                     borderRadius: "2px",
@@ -309,7 +338,7 @@ const Content: FC = () => {
                   fontSize: "11px",
                   color: "#888"
                 }}>
-                  <span>{formatTime(nowPlaying.position_ms)}</span>
+                  <span>{formatTime(displayPosition)}</span>
                   <span>{formatTime(nowPlaying.track?.duration_ms || 0)}</span>
                 </div>
               </div>
