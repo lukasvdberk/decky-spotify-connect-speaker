@@ -23,6 +23,22 @@ interface ServiceStatus {
   state: string;
 }
 
+// Type for now playing state from backend
+interface NowPlayingState {
+  connected: boolean;
+  user_name: string | null;
+  connection_id: string | null;
+  track: {
+    name: string;
+    artists: string[];
+    album: string;
+    cover_url: string;
+    duration_ms: number;
+  } | null;
+  playback_state: "playing" | "paused" | "stopped";
+  position_ms: number;
+}
+
 // Define callable functions matching backend methods
 const getStatus = callable<[], ServiceStatus>("get_status");
 const startLibrespot = callable<[], boolean>("start_librespot");
@@ -30,11 +46,21 @@ const stopLibrespot = callable<[], boolean>("stop_librespot");
 const enableLibrespot = callable<[], boolean>("enable_librespot");
 const disableLibrespot = callable<[], boolean>("disable_librespot");
 const restartLibrespot = callable<[], boolean>("restart_librespot");
+const getNowPlaying = callable<[], NowPlayingState>("get_now_playing");
+
+// Format milliseconds to mm:ss
+const formatTime = (ms: number): string => {
+  const totalSeconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+};
 
 const Content: FC = () => {
   // Core state
   const [status, setStatus] = useState<ServiceStatus | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [nowPlaying, setNowPlaying] = useState<NowPlayingState | null>(null);
 
   // Operation-specific loading states
   const [isToggling, setIsToggling] = useState<boolean>(false);
@@ -64,6 +90,27 @@ const Content: FC = () => {
     };
     loadInitialStatus();
   }, []);
+
+  // Poll for now playing state when service is running
+  useEffect(() => {
+    if (!status?.running) {
+      setNowPlaying(null);
+      return;
+    }
+
+    const poll = async () => {
+      try {
+        const np = await getNowPlaying();
+        setNowPlaying(np);
+      } catch (e) {
+        console.error("Failed to get now playing:", e);
+      }
+    };
+
+    poll(); // Initial fetch
+    const interval = setInterval(poll, 2000);
+    return () => clearInterval(interval);
+  }, [status?.running]);
 
   // Start/Stop handler
   const handleToggleService = async () => {
@@ -173,21 +220,125 @@ const Content: FC = () => {
   const isAnyOperationLoading = isToggling || isTogglingAutostart || isRestarting;
 
   return (
-    <PanelSection title="Spotify Connect">
-      {/* Status Display */}
-      <PanelSectionRow>
-        <Field
-          label="Status"
-          description={status?.state || "unknown"}
-        >
-          <span style={{
-            color: status?.running ? "#1DB954" : "#888888",
-            fontWeight: "bold"
-          }}>
-            {status?.running ? "Running" : "Stopped"}
-          </span>
-        </Field>
-      </PanelSectionRow>
+    <>
+      {/* Now Playing Section */}
+      <PanelSection title="Now Playing">
+        {!status?.running ? (
+          <PanelSectionRow>
+            <Field label="Service not running" />
+          </PanelSectionRow>
+        ) : !nowPlaying?.connected ? (
+          <PanelSectionRow>
+            <div style={{ padding: "8px 0", color: "#b8bcbf" }}>
+              <div style={{ fontWeight: "bold", marginBottom: "8px" }}>
+                Waiting for connection...
+              </div>
+              <div style={{ fontSize: "12px", lineHeight: "1.6", color: "#888" }}>
+                1. Open Spotify on your phone or computer<br/>
+                2. Play any song<br/>
+                3. Tap the "Devices" icon<br/>
+                4. Select "decky-spotify"
+              </div>
+            </div>
+          </PanelSectionRow>
+        ) : nowPlaying?.track ? (
+          <>
+            <PanelSectionRow>
+              <div style={{ display: "flex", gap: "12px", alignItems: "center", padding: "8px 0" }}>
+                {nowPlaying.track.cover_url && (
+                  <img
+                    src={nowPlaying.track.cover_url}
+                    alt="Album art"
+                    style={{ width: 64, height: 64, borderRadius: 4, flexShrink: 0 }}
+                  />
+                )}
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div style={{ fontWeight: "bold", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {nowPlaying.track.name}
+                  </div>
+                  <div style={{ color: "#888", fontSize: "12px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {nowPlaying.track.artists.join(", ")}
+                  </div>
+                  <div style={{ color: "#666", fontSize: "11px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {nowPlaying.track.album}
+                  </div>
+                </div>
+              </div>
+            </PanelSectionRow>
+            {/* Progress bar and time */}
+            <PanelSectionRow>
+              <div style={{ width: "100%" }}>
+                {/* Playback state indicator */}
+                <div style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: "6px"
+                }}>
+                  <span style={{
+                    color: nowPlaying.playback_state === "playing" ? "#1DB954" : "#888",
+                    fontSize: "12px",
+                    fontWeight: "bold"
+                  }}>
+                    {nowPlaying.playback_state === "playing" ? "▶ Playing" : "⏸ Paused"}
+                  </span>
+                </div>
+
+                {/* Progress bar */}
+                <div style={{
+                  width: "100%",
+                  height: "4px",
+                  backgroundColor: "#23262e",
+                  borderRadius: "2px",
+                  overflow: "hidden"
+                }}>
+                  <div style={{
+                    width: `${(nowPlaying.position_ms / (nowPlaying.track?.duration_ms || 1)) * 100}%`,
+                    height: "100%",
+                    backgroundColor: "#1DB954",
+                    borderRadius: "2px",
+                    transition: "width 0.3s ease"
+                  }} />
+                </div>
+
+                {/* Time display */}
+                <div style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  marginTop: "6px",
+                  fontSize: "11px",
+                  color: "#888"
+                }}>
+                  <span>{formatTime(nowPlaying.position_ms)}</span>
+                  <span>{formatTime(nowPlaying.track?.duration_ms || 0)}</span>
+                </div>
+              </div>
+            </PanelSectionRow>
+          </>
+        ) : (
+          <PanelSectionRow>
+            <div style={{ padding: "8px 0", color: "#888" }}>
+              Connected - No track playing
+            </div>
+          </PanelSectionRow>
+        )}
+      </PanelSection>
+
+      <PanelSection title="Service Controls">
+        {/* Status Display */}
+        <PanelSectionRow>
+          <Field
+            label="Status"
+            description={status?.state || "unknown"}
+          >
+            <span style={{
+              color: status?.running ? "#1DB954" : "#888888",
+              fontWeight: "bold"
+            }}>
+              {status?.running ? "Running" : "Stopped"}
+            </span>
+          </Field>
+        </PanelSectionRow>
 
       {/* Start/Stop Button */}
       <PanelSectionRow>
@@ -237,7 +388,8 @@ const Content: FC = () => {
           onChange={handleToggleAutostart}
         />
       </PanelSectionRow>
-    </PanelSection>
+      </PanelSection>
+    </>
   );
 };
 

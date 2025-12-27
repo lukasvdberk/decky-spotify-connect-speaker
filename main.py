@@ -1,5 +1,7 @@
 import os
 import pwd
+import json
+import shutil
 import decky
 import asyncio
 from pathlib import Path
@@ -20,21 +22,36 @@ LIBRESPOT_SPEAKER_NAME = "decky-spotify"
 SERVICE_NAME = "decky-librespot.service"
 SYSTEMD_USER_DIR = Path(DECKY_USER_HOME) / ".config" / "systemd" / "user"
 
+# Event handling configuration
+DATA_DIR = Path(DECKY_USER_HOME) / ".local" / "share" / "decky-spotify"
+SOCKET_PATH = DATA_DIR / "event.sock"
+EVENT_HANDLER_SRC = Path(__file__).parent / "event_handler.py"
+EVENT_HANDLER_DEST = DATA_DIR / "event_handler.py"
+
 class Plugin:
     def __init__(self):
-        pass
+        self._now_playing = {
+            "connected": False,
+            "user_name": None,
+            "connection_id": None,
+            "track": None,
+            "playback_state": "stopped",
+            "position_ms": 0
+        }
+        self._socket_server = None
 
     def _get_service_content(self):
         """Generate systemd service file content"""
         return f"""[Unit]
 Description=Librespot Spotify Connect Speaker
+Wants=network.target sound.target
 After=network.target sound.target
 
 [Service]
 Type=simple
-ExecStart={LIBRESPOT_BIN} -n "{LIBRESPOT_SPEAKER_NAME}" -b 320
+ExecStart={LIBRESPOT_BIN} -n "{LIBRESPOT_SPEAKER_NAME}" -b 320 --onevent {EVENT_HANDLER_DEST}
 Restart=on-failure
-RestartSec=5
+RestartSec=10
 StandardOutput=journal
 StandardError=journal
 
@@ -78,6 +95,100 @@ WantedBy=default.target
             env["DBUS_SESSION_BUS_ADDRESS"] = f"unix:path=/run/user/{DECKY_USER_UID}/bus"
 
         return env
+
+    def _deploy_event_handler(self):
+        """Copy event_handler.py to user data directory"""
+        try:
+            DATA_DIR.mkdir(parents=True, exist_ok=True)
+            shutil.copy(EVENT_HANDLER_SRC, EVENT_HANDLER_DEST)
+            os.chmod(EVENT_HANDLER_DEST, 0o755)
+            decky.logger.info(f"Deployed event handler to {EVENT_HANDLER_DEST}")
+            return True
+        except Exception as e:
+            decky.logger.error(f"Failed to deploy event handler: {e}", exc_info=True)
+            return False
+
+    async def _start_socket_server(self):
+        """Start Unix socket server to receive events from event_handler.py"""
+        try:
+            DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+            # Remove existing socket if present
+            if SOCKET_PATH.exists():
+                SOCKET_PATH.unlink()
+
+            server = await asyncio.start_unix_server(
+                self._handle_event_connection,
+                path=str(SOCKET_PATH)
+            )
+            # Allow event handler (running as user) to connect
+            os.chmod(SOCKET_PATH, 0o666)
+            self._socket_server = server
+            decky.logger.info(f"Socket server started at {SOCKET_PATH}")
+
+        except Exception as e:
+            decky.logger.error(f"Failed to start socket server: {e}", exc_info=True)
+
+    async def _stop_socket_server(self):
+        """Stop the Unix socket server"""
+        if self._socket_server:
+            self._socket_server.close()
+            await self._socket_server.wait_closed()
+            self._socket_server = None
+            decky.logger.info("Socket server stopped")
+
+        # Clean up socket file
+        if SOCKET_PATH.exists():
+            try:
+                SOCKET_PATH.unlink()
+            except Exception:
+                pass
+
+    async def _handle_event_connection(self, reader, writer):
+        """Handle incoming event from event_handler.py"""
+        try:
+            data = await reader.read(4096)
+            writer.close()
+            await writer.wait_closed()
+
+            if data:
+                event = json.loads(data.decode())
+                self._process_event(event)
+        except Exception as e:
+            decky.logger.error(f"Error handling event connection: {e}")
+
+    def _process_event(self, event):
+        """Update internal state based on librespot event"""
+        event_type = event.get("event")
+        decky.logger.info(f"Received event: {event_type}")
+
+        if event_type == "session_connected":
+            self._now_playing["connected"] = True
+            self._now_playing["user_name"] = event.get("user_name")
+            self._now_playing["connection_id"] = event.get("connection_id")
+
+        elif event_type == "session_disconnected":
+            self._now_playing["connected"] = False
+            self._now_playing["user_name"] = None
+            self._now_playing["connection_id"] = None
+            self._now_playing["track"] = None
+            self._now_playing["playback_state"] = "stopped"
+
+        elif event_type == "track_changed":
+            self._now_playing["track"] = {
+                "name": event.get("name"),
+                "artists": event.get("artists", []),
+                "album": event.get("album"),
+                "cover_url": event.get("cover_url"),
+                "duration_ms": event.get("duration_ms", 0)
+            }
+
+        elif event_type in ("playing", "paused", "stopped"):
+            self._now_playing["playback_state"] = event_type
+            self._now_playing["position_ms"] = event.get("position_ms", 0)
+
+        # Emit event to frontend for real-time updates
+        asyncio.create_task(decky.emit("now_playing", self._now_playing))
 
     async def _run_systemctl(self, *args):
         """Run a systemctl --user command"""
@@ -244,10 +355,22 @@ WantedBy=default.target
             decky.logger.error(f"Error getting logs: {e}")
             return None
 
+    async def get_now_playing(self):
+        """Get current playback state - callable from frontend"""
+        return self._now_playing
+
     # Asyncio-compatible long-running code, executed in a task when the plugin is loaded
     async def _main(self):
         try:
             decky.logger.info("Starting librespot plugin")
+
+            # Deploy event handler script
+            if not self._deploy_event_handler():
+                decky.logger.error("Failed to deploy event handler")
+                return
+
+            # Start socket server to receive events
+            await self._start_socket_server()
 
             # Create/update systemd service file
             if not self._create_service_file():
@@ -281,6 +404,8 @@ WantedBy=default.target
     # Function called first during the unload process
     async def _unload(self):
         decky.logger.info("Unloading plugin")
+        # Stop the socket server
+        await self._stop_socket_server()
         # Don't stop the service on unload - let it keep running
         # Users can manually stop it if they want
 
@@ -304,6 +429,16 @@ WantedBy=default.target
 
         except Exception as e:
             decky.logger.error(f"Error removing service file: {e}")
+
+        # Clean up event handler and socket
+        try:
+            if EVENT_HANDLER_DEST.exists():
+                EVENT_HANDLER_DEST.unlink()
+                decky.logger.info(f"Removed event handler: {EVENT_HANDLER_DEST}")
+            if SOCKET_PATH.exists():
+                SOCKET_PATH.unlink()
+        except Exception as e:
+            decky.logger.error(f"Error cleaning up event files: {e}")
 
     async def _migration(self):
         decky.logger.info("Migrating")
