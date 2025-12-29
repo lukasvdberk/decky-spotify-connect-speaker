@@ -1,5 +1,6 @@
 import {
   ButtonItem,
+  DialogButton,
   PanelSection,
   PanelSectionRow,
   Field,
@@ -8,6 +9,7 @@ import {
   TextField,
   Dropdown,
   Spinner,
+  Focusable,
   staticClasses
 } from "@decky/ui";
 import {
@@ -615,85 +617,67 @@ const Content: FC = () => {
 
             {/* Playback Controls */}
             <PanelSectionRow>
-              <div style={{
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "center",
-                gap: "16px",
-                padding: "8px 0"
-              }}>
+              <Focusable
+                style={{
+                  display: "flex",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  gap: "8px",
+                  padding: "8px 0",
+                  width: "100%"
+                }}
+                flow-children="horizontal"
+              >
                 {/* Previous Button */}
-                <button
+                <DialogButton
+                  style={{
+                    minWidth: "40px",
+                    height: "40px",
+                    padding: "8px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center"
+                  }}
                   onClick={handlePrevious}
                   disabled={isControlling}
-                  style={{
-                    background: "none",
-                    border: "none",
-                    color: "#b8bcbf",
-                    fontSize: "20px",
-                    cursor: isControlling ? "not-allowed" : "pointer",
-                    padding: "8px",
-                    borderRadius: "50%",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    opacity: isControlling ? 0.5 : 1,
-                    transition: "color 0.2s"
-                  }}
-                  onMouseEnter={(e) => e.currentTarget.style.color = "#fff"}
-                  onMouseLeave={(e) => e.currentTarget.style.color = "#b8bcbf"}
                 >
                   <FaStepBackward />
-                </button>
+                </DialogButton>
 
                 {/* Play/Pause Button */}
-                <button
+                <DialogButton
+                  style={{
+                    minWidth: "50px",
+                    height: "50px",
+                    padding: "12px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    background: "#1DB954",
+                    borderRadius: "50%"
+                  }}
                   onClick={handlePlayPause}
                   disabled={isControlling}
-                  style={{
-                    background: "#1DB954",
-                    border: "none",
-                    color: "#000",
-                    fontSize: "24px",
-                    cursor: isControlling ? "not-allowed" : "pointer",
-                    padding: "12px",
-                    borderRadius: "50%",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    opacity: isControlling ? 0.5 : 1,
-                    transition: "transform 0.1s"
-                  }}
-                  onMouseEnter={(e) => e.currentTarget.style.transform = "scale(1.05)"}
-                  onMouseLeave={(e) => e.currentTarget.style.transform = "scale(1)"}
                 >
                   {nowPlaying.playback_state === "playing" ? <FaPause /> : <FaPlay style={{ marginLeft: "2px" }} />}
-                </button>
+                </DialogButton>
 
                 {/* Next Button */}
-                <button
-                  onClick={handleNext}
-                  disabled={isControlling}
+                <DialogButton
                   style={{
-                    background: "none",
-                    border: "none",
-                    color: "#b8bcbf",
-                    fontSize: "20px",
-                    cursor: isControlling ? "not-allowed" : "pointer",
+                    minWidth: "40px",
+                    height: "40px",
                     padding: "8px",
-                    borderRadius: "50%",
                     display: "flex",
                     alignItems: "center",
-                    justifyContent: "center",
-                    opacity: isControlling ? 0.5 : 1,
-                    transition: "color 0.2s"
+                    justifyContent: "center"
                   }}
-                  onMouseEnter={(e) => e.currentTarget.style.color = "#fff"}
-                  onMouseLeave={(e) => e.currentTarget.style.color = "#b8bcbf"}
+                  onClick={handleNext}
+                  disabled={isControlling}
                 >
                   <FaStepForward />
-                </button>
-              </div>
+                </DialogButton>
+              </Focusable>
             </PanelSectionRow>
           </>
         ) : (
