@@ -30,7 +30,7 @@ MPRIS_PLAYER_INTERFACE = "org.mpris.MediaPlayer2.Player"
 # Event handling configuration
 DATA_DIR = Path(DECKY_USER_HOME) / ".local" / "share" / "decky-spotify"
 SOCKET_PATH = DATA_DIR / "event.sock"
-EVENT_HANDLER_SRC = Path(__file__).parent.parent / "defaults" / "event_handler.py"
+EVENT_HANDLER_SRC = str(Path(DECKY_PLUGIN_DIR) / "event_handler.py") 
 EVENT_HANDLER_DEST = DATA_DIR / "event_handler.py"
 CONFIG_FILE_PATH = DATA_DIR / "spotifyd.conf"
 
