@@ -61,7 +61,8 @@ class Plugin:
             "connection_id": None,
             "track": None,
             "playback_state": "stopped",
-            "position_ms": 0
+            "position_ms": 0,
+            "volume": 0.5  # 0.0 to 1.0
         }
         self._socket_server = None
 
@@ -391,8 +392,19 @@ WantedBy=default.target
         elif event_type == "sessionconnected":
             self._now_playing["connected"] = True
 
+        # Volume changed event
+        elif event_type == "volumeset":
+            # Fetch current volume from MPRIS
+            asyncio.create_task(self._update_volume())
+
         # Emit event to frontend for real-time updates
         asyncio.create_task(decky.emit("now_playing", self._now_playing))
+
+    async def _update_volume(self):
+        """Fetch current volume from MPRIS and update state"""
+        volume = await self.get_volume()
+        self._now_playing["volume"] = volume
+        await decky.emit("now_playing", self._now_playing)
 
     async def _update_track_metadata_delayed(self):
         """Fetch track metadata with delay to let MPRIS initialize"""
@@ -763,6 +775,97 @@ WantedBy=default.target
         if success:
             decky.logger.info("Skipped to previous track")
         return success
+
+    async def get_volume(self):
+        """Get current volume from MPRIS (0.0 to 1.0) - callable from frontend"""
+        try:
+            bus_name = await self._get_mpris_bus_name()
+            if not bus_name:
+                return self._now_playing.get("volume", 0.5)
+
+            cmd = [
+                "dbus-send",
+                "--print-reply",
+                f"--dest={bus_name}",
+                MPRIS_OBJECT_PATH,
+                "org.freedesktop.DBus.Properties.Get",
+                f"string:{MPRIS_PLAYER_INTERFACE}",
+                "string:Volume"
+            ]
+
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                env=self._get_mpris_env()
+            )
+            stdout, stderr = await process.communicate()
+
+            if process.returncode != 0:
+                decky.logger.error(f"Failed to get volume: {stderr.decode()}")
+                return self._now_playing.get("volume", 0.5)
+
+            # Parse volume from dbus-send output
+            output = stdout.decode()
+            if "double" in output:
+                # Extract double value from output like: variant double 0.5
+                for line in output.split('\n'):
+                    if 'double' in line:
+                        volume = float(line.split('double')[-1].strip())
+                        self._now_playing["volume"] = volume
+                        return volume
+
+            return self._now_playing.get("volume", 0.5)
+
+        except Exception as e:
+            decky.logger.error(f"Failed to get volume: {e}")
+            return self._now_playing.get("volume", 0.5)
+
+    async def set_volume(self, volume: float):
+        """Set volume via MPRIS (0.0 to 1.0) - callable from frontend"""
+        try:
+            # Clamp volume to valid range
+            volume = max(0.0, min(1.0, float(volume)))
+
+            bus_name = await self._get_mpris_bus_name()
+            if not bus_name:
+                decky.logger.error("Could not find MPRIS bus name for volume control")
+                return False
+
+            cmd = [
+                "dbus-send",
+                "--print-reply",
+                f"--dest={bus_name}",
+                MPRIS_OBJECT_PATH,
+                "org.freedesktop.DBus.Properties.Set",
+                f"string:{MPRIS_PLAYER_INTERFACE}",
+                "string:Volume",
+                f"variant:double:{volume}"
+            ]
+
+            decky.logger.info(f"Setting volume to {volume}")
+
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                env=self._get_mpris_env()
+            )
+            stdout, stderr = await process.communicate()
+
+            if process.returncode != 0:
+                decky.logger.error(f"Failed to set volume: {stderr.decode()}")
+                return False
+
+            # Update local state
+            self._now_playing["volume"] = volume
+            await decky.emit("now_playing", self._now_playing)
+
+            return True
+
+        except Exception as e:
+            decky.logger.error(f"Failed to set volume: {e}", exc_info=True)
+            return False
 
     # Asyncio-compatible long-running code, executed in a task when the plugin is loaded
     async def _main(self):

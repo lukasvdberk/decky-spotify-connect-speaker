@@ -19,7 +19,7 @@ import {
   definePlugin,
   toaster
 } from "@decky/api";
-import { useState, useEffect, FC } from "react";
+import { useState, useEffect, useRef, FC } from "react";
 import { FaSpotify, FaCog, FaArrowLeft, FaPlay, FaPause, FaStepBackward, FaStepForward } from "react-icons/fa";
 
 // Type for status response from backend
@@ -44,6 +44,7 @@ interface NowPlayingState {
   } | null;
   playback_state: "playing" | "paused" | "stopped";
   position_ms: number;
+  volume: number; // 0.0 to 1.0
 }
 
 // Type for settings from backend
@@ -69,6 +70,7 @@ const saveSettings = callable<[string, number, string, number], boolean>("save_s
 const playPause = callable<[], boolean>("play_pause");
 const nextTrack = callable<[], boolean>("next_track");
 const previousTrack = callable<[], boolean>("previous_track");
+const setVolume = callable<[number], boolean>("set_volume");
 
 // Format milliseconds to mm:ss
 const formatTime = (ms: number): string => {
@@ -328,6 +330,8 @@ const Content: FC = () => {
   const [isToggling, setIsToggling] = useState<boolean>(false);
   const [isRestarting, setIsRestarting] = useState<boolean>(false);
   const [isControlling, setIsControlling] = useState<boolean>(false);
+  const [isAdjustingVolume, setIsAdjustingVolume] = useState<boolean>(false);
+  const [localVolume, setLocalVolume] = useState<number>(50);
 
   // Refresh status from backend
   const refreshStatus = async () => {
@@ -397,6 +401,15 @@ const Content: FC = () => {
 
     return () => clearInterval(interval);
   }, [nowPlaying?.playback_state, nowPlaying?.track]);
+
+  // Sync local volume with backend when not adjusting
+  const volumeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    if (!isAdjustingVolume && nowPlaying?.volume !== undefined) {
+      setLocalVolume(Math.round(nowPlaying.volume * 100));
+    }
+  }, [nowPlaying?.volume, isAdjustingVolume]);
 
   // Start/Stop handler
   const handleToggleService = async () => {
@@ -490,6 +503,28 @@ const Content: FC = () => {
     } finally {
       setIsControlling(false);
     }
+  };
+
+  // Volume change handler with debounce
+  const handleVolumeChange = (value: number) => {
+    setLocalVolume(value);
+    setIsAdjustingVolume(true);
+
+    // Clear existing timeout
+    if (volumeTimeoutRef.current) {
+      clearTimeout(volumeTimeoutRef.current);
+    }
+
+    // Send volume to backend
+    const normalizedVolume = value / 100.0;
+    setVolume(normalizedVolume).catch((error) => {
+      console.error("Volume change error:", error);
+    });
+
+    // Reset adjusting state after delay
+    volumeTimeoutRef.current = setTimeout(() => {
+      setIsAdjustingVolume(false);
+    }, 1500);
   };
 
   // Loading state for initial load
@@ -678,6 +713,19 @@ const Content: FC = () => {
                   <FaStepForward />
                 </DialogButton>
               </Focusable>
+            </PanelSectionRow>
+
+            {/* Volume Slider */}
+            <PanelSectionRow>
+              <SliderField
+                label="Volume"
+                value={localVolume}
+                min={0}
+                max={100}
+                step={1}
+                onChange={handleVolumeChange}
+                showValue={true}
+              />
             </PanelSectionRow>
           </>
         ) : (
