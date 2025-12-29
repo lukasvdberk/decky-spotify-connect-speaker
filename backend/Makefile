@@ -1,14 +1,28 @@
-# This is the default target, which will be built when 
-# you invoke make
+# Makefile for building spotifyd from Arch Linux package
+
+# Arch package details (using archive.archlinux.org for reliability)
+SPOTIFYD_PKG = spotifyd-0.4.2-1-x86_64.pkg.tar.zst
+SPOTIFYD_URL = https://archive.archlinux.org/packages/s/spotifyd/$(SPOTIFYD_PKG)
+
+# Output directory for binaries (will be copied to plugin bin/ folder)
+OUT_DIR = ./out
+
 .PHONY: all
-all: hello
+all: spotifyd
 
-# This rule tells make how to build hello from hello.cpp
-hello:
-	mkdir -p ./out
-	gcc -o ./out/hello ./src/main.c 
+# Download and extract spotifyd from Arch package
+spotifyd:
+	mkdir -p $(OUT_DIR)
+	mkdir -p ./tmp
+	@echo "Downloading spotifyd from Arch Linux..."
+	curl -L -o ./tmp/$(SPOTIFYD_PKG) $(SPOTIFYD_URL)
+	@echo "Extracting spotifyd binary..."
+	cd ./tmp && tar --use-compress-program=unzstd -xf $(SPOTIFYD_PKG) usr/bin/spotifyd
+	cp ./tmp/usr/bin/spotifyd $(OUT_DIR)/spotifyd
+	chmod +x $(OUT_DIR)/spotifyd
+	rm -rf ./tmp
+	@echo "spotifyd binary extracted to $(OUT_DIR)/spotifyd"
 
-# This rule tells make to delete hello and hello.o
-.PHONY: clean 
+.PHONY: clean
 clean:
-	rm -f hello
+	rm -rf $(OUT_DIR) ./tmp

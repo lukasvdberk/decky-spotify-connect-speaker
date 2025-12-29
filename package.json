@@ -25,14 +25,6 @@
   "bugs": {
     "url": "https://github.com/lukasvdberk/decky-spotify-connect-speaker/issues"
   },
-  "remote_binary_bundling": true,
-  "remote_binary": [
-    {
-      "name": "spotifyd",
-      "url": "https://github.com/Spotifyd/spotifyd/releases/download/v0.4.2/spotifyd-linux-x86_64-full.tar.gz",
-      "sha256hash": "0c0657c61245355dc37e522f19cb1d73b947dbbc430d491aa9303e23c825c089"
-    }
-  ],
   "homepage": "https://github.com/lukasvdberk/decky-spotify-connect-speaker#readme",
   "devDependencies": {
     "@decky/rollup": "^1.0.2",
