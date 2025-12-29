@@ -8,6 +8,7 @@ from pathlib import Path
 # Get Decky environment variables with fallbacks
 DECKY_USER = os.environ.get("DECKY_USER", "deck")
 DECKY_USER_HOME = os.environ.get("DECKY_USER_HOME", "/home/deck")
+DECKY_PLUGIN_DIR = os.environ.get("DECKY_PLUGIN_DIR", "")
 SETTINGS_DIR = os.environ.get("DECKY_PLUGIN_SETTINGS_DIR", "")
 
 # Get UID from username using pwd module
@@ -17,7 +18,7 @@ except KeyError:
     DECKY_USER_UID = 1000  # fallback to default deck UID
 
 # Plugin configuration using Decky's environment
-SPOTIFYD_BIN = f"{DECKY_USER_HOME}/spotifyd"
+SPOTIFYD_BIN = str(Path(DECKY_PLUGIN_DIR) / "bin" / "spotifyd")
 SERVICE_NAME = "decky-spotifyd.service"
 SYSTEMD_USER_DIR = Path(DECKY_USER_HOME) / ".config" / "systemd" / "user"
 
