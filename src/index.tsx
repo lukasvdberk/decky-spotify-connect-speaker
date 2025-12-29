@@ -602,7 +602,7 @@ const Content: FC = () => {
             </PanelSectionRow>
             {/* Progress bar and time */}
             <PanelSectionRow>
-              <div style={{ width: "100%" }}>
+              <div style={{ boxSizing: "border-box", width: "100%", paddingRight: "16px" }}>
                 {/* Playback state indicator */}
                 <div style={{
                   display: "flex",
@@ -621,7 +621,6 @@ const Content: FC = () => {
 
                 {/* Progress bar */}
                 <div style={{
-                  width: "100%",
                   height: "4px",
                   backgroundColor: "#23262e",
                   borderRadius: "2px",
