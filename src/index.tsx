@@ -14,7 +14,8 @@ import {
   Router,
   DialogBody,
   DialogControlsSection,
-  DialogControlsSectionHeader
+  DialogControlsSectionHeader,
+  scrollPanelClasses
 } from "@decky/ui";
 import {
   addEventListener,
@@ -507,6 +508,12 @@ const Content: FC = () => {
 
   return (
     <>
+      {/* CSS to ensure scroll shows content above focused elements */}
+      <style>{`
+        .${scrollPanelClasses.ScrollPanel} {
+          scroll-padding-top: 200px;
+        }
+      `}</style>
       {/* Now Playing Section */}
       <PanelSection title="Now Playing">
         {!status?.running ? (
