@@ -602,7 +602,7 @@ const Content: FC = () => {
             </PanelSectionRow>
             {/* Progress bar and time */}
             <PanelSectionRow>
-              <div style={{ width: "100%", padding: "0 24px" }}>
+              <div style={{ width: "100%" }}>
                 {/* Playback state indicator */}
                 <div style={{
                   display: "flex",
@@ -673,8 +673,7 @@ const Content: FC = () => {
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    borderRadius: "50%",
-                    background: "transparent"
+                    borderRadius: "50%"
                   }}
                   onClick={handlePrevious}
                   disabled={isControlling}
@@ -711,8 +710,7 @@ const Content: FC = () => {
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    borderRadius: "50%",
-                    background: "transparent"
+                    borderRadius: "50%"
                   }}
                   onClick={handleNext}
                   disabled={isControlling}
