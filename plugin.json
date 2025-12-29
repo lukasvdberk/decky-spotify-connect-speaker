@@ -1,11 +1,11 @@
 {
   "name": "Spotify connect speaker",
-  "author": "John Doe",
-  "flags": ["debug", "_root"],
+  "author": "Lukas van den Berk",
+  "flags": [],
   "api_version": 1,
   "publish": {
-    "tags": ["template", "root"],
-    "description": "Decky example plugin.",
+    "tags": ["music", "media", "mpris"],
+    "description": "Turn your Steam Deck into a Spotify Connect speaker - stream your music and control playback directly from the Quick Access menu",
     "image": "https://opengraph.githubassets.com/1/SteamDeckHomebrew/PluginLoader"
   }
 }
