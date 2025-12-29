@@ -49,8 +49,8 @@ settings.read()
 DEFAULT_SETTINGS = {
     "speaker_name": "decky-spotify",
     "bitrate": 320,
-    "device_type": "speaker",
-    "initial_volume": 50
+    "device_type": "game-console",
+    "initial_volume": 80
 }
 
 class Plugin:
