@@ -588,13 +588,13 @@ const Content: FC = () => {
                   />
                 )}
                 <div style={{ minWidth: 0, flex: 1 }}>
-                  <div style={{ fontWeight: "bold", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <div style={{ fontWeight: "bold", color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {nowPlaying.track.name}
                   </div>
-                  <div style={{ color: "#888", fontSize: "12px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <div style={{ color: "#b8bcbf", fontSize: "12px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {nowPlaying.track.artists?.join(", ") || "Unknown Artist"}
                   </div>
-                  <div style={{ color: "#666", fontSize: "11px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <div style={{ color: "#8b929a", fontSize: "11px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {nowPlaying.track.album || "Unknown Album"}
                   </div>
                 </div>
@@ -602,7 +602,7 @@ const Content: FC = () => {
             </PanelSectionRow>
             {/* Progress bar and time */}
             <PanelSectionRow>
-              <div style={{ width: "100%", paddingRight: "16px" }}>
+              <div style={{ width: "100%", padding: "0 24px" }}>
                 {/* Playback state indicator */}
                 <div style={{
                   display: "flex",
@@ -657,7 +657,7 @@ const Content: FC = () => {
                   display: "flex",
                   justifyContent: "center",
                   alignItems: "center",
-                  gap: "8px",
+                  gap: "16px",
                   padding: "8px 0",
                   width: "100%"
                 }}
@@ -666,12 +666,15 @@ const Content: FC = () => {
                 {/* Previous Button */}
                 <DialogButton
                   style={{
-                    minWidth: "40px",
+                    width: "40px",
                     height: "40px",
-                    padding: "8px",
+                    minWidth: "40px",
+                    padding: "0",
                     display: "flex",
                     alignItems: "center",
-                    justifyContent: "center"
+                    justifyContent: "center",
+                    borderRadius: "50%",
+                    background: "transparent"
                   }}
                   onClick={handlePrevious}
                   disabled={isControlling}
@@ -682,9 +685,10 @@ const Content: FC = () => {
                 {/* Play/Pause Button */}
                 <DialogButton
                   style={{
-                    minWidth: "50px",
-                    height: "50px",
-                    padding: "12px",
+                    width: "56px",
+                    height: "56px",
+                    minWidth: "56px",
+                    padding: "0",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -700,12 +704,15 @@ const Content: FC = () => {
                 {/* Next Button */}
                 <DialogButton
                   style={{
-                    minWidth: "40px",
+                    width: "40px",
                     height: "40px",
-                    padding: "8px",
+                    minWidth: "40px",
+                    padding: "0",
                     display: "flex",
                     alignItems: "center",
-                    justifyContent: "center"
+                    justifyContent: "center",
+                    borderRadius: "50%",
+                    background: "transparent"
                   }}
                   onClick={handleNext}
                   disabled={isControlling}
