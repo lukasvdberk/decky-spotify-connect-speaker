@@ -101,14 +101,14 @@ const DEVICE_TYPE_OPTIONS = [
   { data: "tv", label: "TV" },
   { data: "avr", label: "AVR (Audio/Video Receiver)" },
   { data: "stb", label: "STB (Set-Top Box)" },
-  { data: "audio-dongle", label: "Audio Dongle" },
-  { data: "game-console", label: "Game Console" },
+  { data: "audio_dongle", label: "Audio Dongle" },
+  { data: "game_console", label: "Game Console" },
   { data: "cast-audio", label: "Cast Audio" },
   { data: "cast-video", label: "Cast Video" },
   { data: "automobile", label: "Automobile" },
   { data: "smartwatch", label: "Smartwatch" },
   { data: "chromebook", label: "Chromebook" },
-  { data: "car-thing", label: "Car Thing" },
+  { data: "car_thing", label: "Car Thing" },
   { data: "observer", label: "Observer" }
 ];
 
@@ -220,58 +220,46 @@ const SpotifySettingsRoute: FC = () => {
   }
 
   return (
-    <DialogBody>
+    <div style={{ padding: "16px 24px" }}>
       <DialogControlsSection>
         <DialogControlsSectionHeader>Speaker Settings</DialogControlsSectionHeader>
 
-        {/* Speaker Name */}
         <TextField
           label="Speaker Name"
-          description="Name shown in Spotify's device list"
           value={speakerName}
           onChange={(e) => setSpeakerName(e.target.value)}
         />
 
-        {/* Bitrate */}
         <DropdownItem
           label="Bitrate"
-          description="Audio quality"
           rgOptions={BITRATE_OPTIONS}
           selectedOption={bitrate}
           onChange={(option) => setBitrate(option.data)}
         />
 
-        {/* Device Type */}
         <DropdownItem
           label="Device Type"
-          description="How this device appears in Spotify"
           rgOptions={DEVICE_TYPE_OPTIONS}
           selectedOption={deviceType}
           onChange={(option) => setDeviceType(option.data)}
         />
 
-        {/* Initial Volume */}
         <SliderField
-          label="Initial Volume"
-          description={`Volume when starting: ${initialVolume}%`}
+          label={`Initial Volume: ${initialVolume}%`}
           value={initialVolume}
           min={0}
           max={100}
           step={1}
           onChange={(value) => setInitialVolume(value)}
-          showValue={true}
         />
 
-        {/* Auto-start Toggle */}
         <ToggleField
           label="Auto-start on boot"
-          description="Start Spotify Connect when Steam Deck boots"
           checked={serviceStatus?.enabled ?? false}
           disabled={isTogglingAutostart || isSaving}
           onChange={handleToggleAutostart}
         />
 
-        {/* Save Button */}
         <ButtonItem
           layout="below"
           onClick={handleSave}
@@ -287,7 +275,7 @@ const SpotifySettingsRoute: FC = () => {
           )}
         </ButtonItem>
       </DialogControlsSection>
-    </DialogBody>
+    </div>
   );
 };
 
