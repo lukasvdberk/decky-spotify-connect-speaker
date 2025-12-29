@@ -7,20 +7,25 @@ import {
   ToggleField,
   SliderField,
   TextField,
-  Dropdown,
+  DropdownItem,
   Spinner,
   Focusable,
-  staticClasses
+  staticClasses,
+  Router,
+  DialogBody,
+  DialogControlsSection,
+  DialogControlsSectionHeader
 } from "@decky/ui";
 import {
   addEventListener,
   removeEventListener,
   callable,
   definePlugin,
-  toaster
+  toaster,
+  routerHook
 } from "@decky/api";
 import { useState, useEffect, useRef, FC } from "react";
-import { FaSpotify, FaCog, FaArrowLeft, FaPlay, FaPause, FaStepBackward, FaStepForward } from "react-icons/fa";
+import { FaSpotify, FaCog, FaPlay, FaPause, FaStepBackward, FaStepForward } from "react-icons/fa";
 
 // Type for status response from backend
 interface ServiceStatus {
@@ -107,17 +112,12 @@ const DEVICE_TYPE_OPTIONS = [
   { data: "observer", label: "Observer" }
 ];
 
-// Settings page component
-interface SettingsPageProps {
-  onBack: () => void;
-  serviceStatus: ServiceStatus | null;
-  onStatusRefresh: () => Promise<void>;
-}
-
-const SettingsPage: FC<SettingsPageProps> = ({ onBack, serviceStatus, onStatusRefresh }) => {
+// Settings route component - full page settings accessible via Router.Navigate
+const SpotifySettingsRoute: FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isTogglingAutostart, setIsTogglingAutostart] = useState(false);
+  const [serviceStatus, setServiceStatus] = useState<ServiceStatus | null>(null);
 
   // Local form state
   const [speakerName, setSpeakerName] = useState("");
@@ -125,19 +125,20 @@ const SettingsPage: FC<SettingsPageProps> = ({ onBack, serviceStatus, onStatusRe
   const [deviceType, setDeviceType] = useState("speaker");
   const [initialVolume, setInitialVolume] = useState(50);
 
-  // Load settings on mount
+  // Load settings and status on mount
   useEffect(() => {
-    loadSettings();
+    loadData();
   }, []);
 
-  const loadSettings = async () => {
+  const loadData = async () => {
     setIsLoading(true);
     try {
-      const s = await getSettings();
-      setSpeakerName(s.speaker_name);
-      setBitrate(s.bitrate);
-      setDeviceType(s.device_type);
-      setInitialVolume(s.initial_volume);
+      const [settings, status] = await Promise.all([getSettings(), getStatus()]);
+      setSpeakerName(settings.speaker_name);
+      setBitrate(settings.bitrate);
+      setDeviceType(settings.device_type);
+      setInitialVolume(settings.initial_volume);
+      setServiceStatus(status);
     } catch (error) {
       console.error("Failed to load settings:", error);
       toaster.toast({
@@ -186,7 +187,9 @@ const SettingsPage: FC<SettingsPageProps> = ({ onBack, serviceStatus, onStatusRe
           title: "Success",
           body: enabled ? "Auto-start enabled" : "Auto-start disabled"
         });
-        await onStatusRefresh();
+        // Refresh status
+        const status = await getStatus();
+        setServiceStatus(status);
       } else {
         toaster.toast({
           title: "Error",
@@ -206,70 +209,48 @@ const SettingsPage: FC<SettingsPageProps> = ({ onBack, serviceStatus, onStatusRe
 
   if (isLoading) {
     return (
-      <PanelSection title="Settings">
-        <PanelSectionRow>
-          <div style={{ display: "flex", justifyContent: "center", padding: "20px" }}>
-            <Spinner style={{ width: 24, height: 24 }} />
+      <DialogBody>
+        <DialogControlsSection>
+          <div style={{ display: "flex", justifyContent: "center", padding: "40px" }}>
+            <Spinner style={{ width: 32, height: 32 }} />
           </div>
-        </PanelSectionRow>
-      </PanelSection>
+        </DialogControlsSection>
+      </DialogBody>
     );
   }
 
   return (
-    <PanelSection title="Settings">
-      {/* Back button */}
-      <PanelSectionRow>
-        <ButtonItem
-          layout="below"
-          onClick={onBack}
-        >
-          <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <FaArrowLeft /> Back
-          </span>
-        </ButtonItem>
-      </PanelSectionRow>
+    <DialogBody>
+      <DialogControlsSection>
+        <DialogControlsSectionHeader>Speaker Settings</DialogControlsSectionHeader>
 
-      {/* Speaker Name */}
-      <PanelSectionRow>
+        {/* Speaker Name */}
         <TextField
           label="Speaker Name"
           description="Name shown in Spotify's device list"
           value={speakerName}
           onChange={(e) => setSpeakerName(e.target.value)}
         />
-      </PanelSectionRow>
 
-      {/* Bitrate */}
-      <PanelSectionRow>
-        <Field
+        {/* Bitrate */}
+        <DropdownItem
           label="Bitrate"
-          description="Audio quality (higher = better quality, more bandwidth)"
-        >
-          <Dropdown
-            selectedOption={bitrate}
-            rgOptions={BITRATE_OPTIONS}
-            onChange={(option) => setBitrate(option.data)}
-          />
-        </Field>
-      </PanelSectionRow>
+          description="Audio quality"
+          rgOptions={BITRATE_OPTIONS}
+          selectedOption={bitrate}
+          onChange={(option) => setBitrate(option.data)}
+        />
 
-      {/* Device Type */}
-      <PanelSectionRow>
-        <Field
+        {/* Device Type */}
+        <DropdownItem
           label="Device Type"
           description="How this device appears in Spotify"
-        >
-          <Dropdown
-            selectedOption={deviceType}
-            rgOptions={DEVICE_TYPE_OPTIONS}
-            onChange={(option) => setDeviceType(option.data)}
-          />
-        </Field>
-      </PanelSectionRow>
+          rgOptions={DEVICE_TYPE_OPTIONS}
+          selectedOption={deviceType}
+          onChange={(option) => setDeviceType(option.data)}
+        />
 
-      {/* Initial Volume */}
-      <PanelSectionRow>
+        {/* Initial Volume */}
         <SliderField
           label="Initial Volume"
           description={`Volume when starting: ${initialVolume}%`}
@@ -280,10 +261,8 @@ const SettingsPage: FC<SettingsPageProps> = ({ onBack, serviceStatus, onStatusRe
           onChange={(value) => setInitialVolume(value)}
           showValue={true}
         />
-      </PanelSectionRow>
 
-      {/* Auto-start Toggle */}
-      <PanelSectionRow>
+        {/* Auto-start Toggle */}
         <ToggleField
           label="Auto-start on boot"
           description="Start Spotify Connect when Steam Deck boots"
@@ -291,10 +270,8 @@ const SettingsPage: FC<SettingsPageProps> = ({ onBack, serviceStatus, onStatusRe
           disabled={isTogglingAutostart || isSaving}
           onChange={handleToggleAutostart}
         />
-      </PanelSectionRow>
 
-      {/* Save Button */}
-      <PanelSectionRow>
+        {/* Save Button */}
         <ButtonItem
           layout="below"
           onClick={handleSave}
@@ -309,8 +286,8 @@ const SettingsPage: FC<SettingsPageProps> = ({ onBack, serviceStatus, onStatusRe
             "Save Settings"
           )}
         </ButtonItem>
-      </PanelSectionRow>
-    </PanelSection>
+      </DialogControlsSection>
+    </DialogBody>
   );
 };
 
@@ -319,9 +296,6 @@ const Content: FC = () => {
   const [status, setStatus] = useState<ServiceStatus | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [nowPlaying, setNowPlaying] = useState<NowPlayingState | null>(null);
-
-  // Navigation state
-  const [showSettings, setShowSettings] = useState<boolean>(false);
 
   // Local position tracking (simulates playback progress between events)
   const [displayPosition, setDisplayPosition] = useState<number>(0);
@@ -542,17 +516,6 @@ const Content: FC = () => {
 
   // Determine if any operation is in progress
   const isAnyOperationLoading = isToggling || isRestarting;
-
-  // Show settings page if navigated there
-  if (showSettings) {
-    return (
-      <SettingsPage
-        onBack={() => setShowSettings(false)}
-        serviceStatus={status}
-        onStatusRefresh={refreshStatus}
-      />
-    );
-  }
 
   return (
     <>
@@ -799,7 +762,10 @@ const Content: FC = () => {
       <PanelSectionRow>
         <ButtonItem
           layout="below"
-          onClick={() => setShowSettings(true)}
+          onClick={() => {
+            Router.CloseSideMenus();
+            Router.Navigate("/decky-spotify-settings");
+          }}
         >
           <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <FaCog /> Settings
@@ -813,6 +779,11 @@ const Content: FC = () => {
 
 export default definePlugin(() => {
   console.log("Spotify Connect Speaker plugin initializing");
+
+  // Register settings route
+  routerHook.addRoute("/decky-spotify-settings", SpotifySettingsRoute, {
+    exact: true
+  });
 
   return {
     name: "Spotify Connect Speaker",
@@ -828,6 +799,7 @@ export default definePlugin(() => {
     icon: <FaSpotify />,
     onDismount() {
       console.log("Spotify Connect Speaker plugin unloading");
+      routerHook.removeRoute("/decky-spotify-settings");
     },
   };
 });
