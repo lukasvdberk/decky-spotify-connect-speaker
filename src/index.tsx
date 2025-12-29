@@ -4,6 +4,9 @@ import {
   PanelSectionRow,
   Field,
   ToggleField,
+  SliderField,
+  TextField,
+  Dropdown,
   Spinner,
   staticClasses
 } from "@decky/ui";
@@ -15,7 +18,7 @@ import {
   toaster
 } from "@decky/api";
 import { useState, useEffect, FC } from "react";
-import { FaSpotify } from "react-icons/fa";
+import { FaSpotify, FaCog, FaArrowLeft, FaPlay, FaPause, FaStepBackward, FaStepForward } from "react-icons/fa";
 
 // Type for status response from backend
 interface ServiceStatus {
@@ -41,14 +44,29 @@ interface NowPlayingState {
   position_ms: number;
 }
 
+// Type for settings from backend
+interface Settings {
+  speaker_name: string;
+  bitrate: number;
+  device_type: string;
+  initial_volume: number;
+}
+
 // Define callable functions matching backend methods
 const getStatus = callable<[], ServiceStatus>("get_status");
-const startLibrespot = callable<[], boolean>("start_librespot");
-const stopLibrespot = callable<[], boolean>("stop_librespot");
-const enableLibrespot = callable<[], boolean>("enable_librespot");
-const disableLibrespot = callable<[], boolean>("disable_librespot");
-const restartLibrespot = callable<[], boolean>("restart_librespot");
+const startSpotifyd = callable<[], boolean>("start_spotifyd");
+const stopSpotifyd = callable<[], boolean>("stop_spotifyd");
+const enableSpotifyd = callable<[], boolean>("enable_spotifyd");
+const disableSpotifyd = callable<[], boolean>("disable_spotifyd");
+const restartSpotifyd = callable<[], boolean>("restart_spotifyd");
 const getNowPlaying = callable<[], NowPlayingState>("get_now_playing");
+const getSettings = callable<[], Settings>("get_settings");
+const saveSettings = callable<[string, number, string, number], boolean>("save_settings");
+
+// Playback control methods (via MPRIS)
+const playPause = callable<[], boolean>("play_pause");
+const nextTrack = callable<[], boolean>("next_track");
+const previousTrack = callable<[], boolean>("previous_track");
 
 // Format milliseconds to mm:ss
 const formatTime = (ms: number): string => {
@@ -58,19 +76,256 @@ const formatTime = (ms: number): string => {
   return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 };
 
+// Bitrate options for dropdown
+const BITRATE_OPTIONS = [
+  { data: 96, label: "96 kbps (Low)" },
+  { data: 160, label: "160 kbps (Normal)" },
+  { data: 320, label: "320 kbps (High)" }
+];
+
+// Device type options for dropdown (must match spotifyd --device-type values)
+const DEVICE_TYPE_OPTIONS = [
+  { data: "computer", label: "Computer" },
+  { data: "tablet", label: "Tablet" },
+  { data: "smartphone", label: "Smartphone" },
+  { data: "speaker", label: "Speaker" },
+  { data: "tv", label: "TV" },
+  { data: "avr", label: "AVR (Audio/Video Receiver)" },
+  { data: "stb", label: "STB (Set-Top Box)" },
+  { data: "audio-dongle", label: "Audio Dongle" },
+  { data: "game-console", label: "Game Console" },
+  { data: "cast-audio", label: "Cast Audio" },
+  { data: "cast-video", label: "Cast Video" },
+  { data: "automobile", label: "Automobile" },
+  { data: "smartwatch", label: "Smartwatch" },
+  { data: "chromebook", label: "Chromebook" },
+  { data: "car-thing", label: "Car Thing" },
+  { data: "observer", label: "Observer" }
+];
+
+// Settings page component
+interface SettingsPageProps {
+  onBack: () => void;
+  serviceStatus: ServiceStatus | null;
+  onStatusRefresh: () => Promise<void>;
+}
+
+const SettingsPage: FC<SettingsPageProps> = ({ onBack, serviceStatus, onStatusRefresh }) => {
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isTogglingAutostart, setIsTogglingAutostart] = useState(false);
+
+  // Local form state
+  const [speakerName, setSpeakerName] = useState("");
+  const [bitrate, setBitrate] = useState(320);
+  const [deviceType, setDeviceType] = useState("speaker");
+  const [initialVolume, setInitialVolume] = useState(50);
+
+  // Load settings on mount
+  useEffect(() => {
+    loadSettings();
+  }, []);
+
+  const loadSettings = async () => {
+    setIsLoading(true);
+    try {
+      const s = await getSettings();
+      setSpeakerName(s.speaker_name);
+      setBitrate(s.bitrate);
+      setDeviceType(s.device_type);
+      setInitialVolume(s.initial_volume);
+    } catch (error) {
+      console.error("Failed to load settings:", error);
+      toaster.toast({
+        title: "Error",
+        body: "Failed to load settings"
+      });
+    }
+    setIsLoading(false);
+  };
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      const success = await saveSettings(speakerName, bitrate, deviceType, initialVolume);
+      if (success) {
+        toaster.toast({
+          title: "Settings saved",
+          body: serviceStatus?.running ? "Service restarted with new settings" : "Settings saved successfully"
+        });
+      } else {
+        toaster.toast({
+          title: "Error",
+          body: "Failed to save settings"
+        });
+      }
+    } catch (error) {
+      console.error("Failed to save settings:", error);
+      toaster.toast({
+        title: "Error",
+        body: "Failed to save settings"
+      });
+    }
+    setIsSaving(false);
+  };
+
+  // Auto-start toggle handler
+  const handleToggleAutostart = async (enabled: boolean) => {
+    setIsTogglingAutostart(true);
+    try {
+      const success = enabled
+        ? await enableSpotifyd()
+        : await disableSpotifyd();
+
+      if (success) {
+        toaster.toast({
+          title: "Success",
+          body: enabled ? "Auto-start enabled" : "Auto-start disabled"
+        });
+        await onStatusRefresh();
+      } else {
+        toaster.toast({
+          title: "Error",
+          body: `Failed to ${enabled ? "enable" : "disable"} auto-start`
+        });
+      }
+    } catch (error) {
+      console.error("Toggle autostart error:", error);
+      toaster.toast({
+        title: "Error",
+        body: "Operation failed"
+      });
+    } finally {
+      setIsTogglingAutostart(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <PanelSection title="Settings">
+        <PanelSectionRow>
+          <div style={{ display: "flex", justifyContent: "center", padding: "20px" }}>
+            <Spinner style={{ width: 24, height: 24 }} />
+          </div>
+        </PanelSectionRow>
+      </PanelSection>
+    );
+  }
+
+  return (
+    <PanelSection title="Settings">
+      {/* Back button */}
+      <PanelSectionRow>
+        <ButtonItem
+          layout="below"
+          onClick={onBack}
+        >
+          <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <FaArrowLeft /> Back
+          </span>
+        </ButtonItem>
+      </PanelSectionRow>
+
+      {/* Speaker Name */}
+      <PanelSectionRow>
+        <TextField
+          label="Speaker Name"
+          description="Name shown in Spotify's device list"
+          value={speakerName}
+          onChange={(e) => setSpeakerName(e.target.value)}
+        />
+      </PanelSectionRow>
+
+      {/* Bitrate */}
+      <PanelSectionRow>
+        <Field
+          label="Bitrate"
+          description="Audio quality (higher = better quality, more bandwidth)"
+        >
+          <Dropdown
+            selectedOption={bitrate}
+            rgOptions={BITRATE_OPTIONS}
+            onChange={(option) => setBitrate(option.data)}
+          />
+        </Field>
+      </PanelSectionRow>
+
+      {/* Device Type */}
+      <PanelSectionRow>
+        <Field
+          label="Device Type"
+          description="How this device appears in Spotify"
+        >
+          <Dropdown
+            selectedOption={deviceType}
+            rgOptions={DEVICE_TYPE_OPTIONS}
+            onChange={(option) => setDeviceType(option.data)}
+          />
+        </Field>
+      </PanelSectionRow>
+
+      {/* Initial Volume */}
+      <PanelSectionRow>
+        <SliderField
+          label="Initial Volume"
+          description={`Volume when starting: ${initialVolume}%`}
+          value={initialVolume}
+          min={0}
+          max={100}
+          step={1}
+          onChange={(value) => setInitialVolume(value)}
+          showValue={true}
+        />
+      </PanelSectionRow>
+
+      {/* Auto-start Toggle */}
+      <PanelSectionRow>
+        <ToggleField
+          label="Auto-start on boot"
+          description="Start Spotify Connect when Steam Deck boots"
+          checked={serviceStatus?.enabled ?? false}
+          disabled={isTogglingAutostart || isSaving}
+          onChange={handleToggleAutostart}
+        />
+      </PanelSectionRow>
+
+      {/* Save Button */}
+      <PanelSectionRow>
+        <ButtonItem
+          layout="below"
+          onClick={handleSave}
+          disabled={isSaving}
+        >
+          {isSaving ? (
+            <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}>
+              <Spinner style={{ width: 16, height: 16 }} />
+              Saving...
+            </span>
+          ) : (
+            "Save Settings"
+          )}
+        </ButtonItem>
+      </PanelSectionRow>
+    </PanelSection>
+  );
+};
+
 const Content: FC = () => {
   // Core state
   const [status, setStatus] = useState<ServiceStatus | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [nowPlaying, setNowPlaying] = useState<NowPlayingState | null>(null);
 
+  // Navigation state
+  const [showSettings, setShowSettings] = useState<boolean>(false);
+
   // Local position tracking (simulates playback progress between events)
   const [displayPosition, setDisplayPosition] = useState<number>(0);
 
   // Operation-specific loading states
   const [isToggling, setIsToggling] = useState<boolean>(false);
-  const [isTogglingAutostart, setIsTogglingAutostart] = useState<boolean>(false);
   const [isRestarting, setIsRestarting] = useState<boolean>(false);
+  const [isControlling, setIsControlling] = useState<boolean>(false);
 
   // Refresh status from backend
   const refreshStatus = async () => {
@@ -147,8 +402,8 @@ const Content: FC = () => {
     setIsToggling(true);
     try {
       const success = status.running
-        ? await stopLibrespot()
-        : await startLibrespot();
+        ? await stopSpotifyd()
+        : await startSpotifyd();
 
       if (success) {
         toaster.toast({
@@ -173,42 +428,11 @@ const Content: FC = () => {
     }
   };
 
-  // Auto-start toggle handler
-  const handleToggleAutostart = async (enabled: boolean) => {
-    setIsTogglingAutostart(true);
-    try {
-      const success = enabled
-        ? await enableLibrespot()
-        : await disableLibrespot();
-
-      if (success) {
-        toaster.toast({
-          title: "Success",
-          body: enabled ? "Auto-start enabled" : "Auto-start disabled"
-        });
-        await refreshStatus();
-      } else {
-        toaster.toast({
-          title: "Error",
-          body: `Failed to ${enabled ? "enable" : "disable"} auto-start`
-        });
-      }
-    } catch (error) {
-      console.error("Toggle autostart error:", error);
-      toaster.toast({
-        title: "Error",
-        body: "Operation failed"
-      });
-    } finally {
-      setIsTogglingAutostart(false);
-    }
-  };
-
   // Restart handler
   const handleRestart = async () => {
     setIsRestarting(true);
     try {
-      const success = await restartLibrespot();
+      const success = await restartSpotifyd();
       if (success) {
         toaster.toast({
           title: "Success",
@@ -232,6 +456,40 @@ const Content: FC = () => {
     }
   };
 
+  // Playback control handlers
+  const handlePlayPause = async () => {
+    setIsControlling(true);
+    try {
+      await playPause();
+    } catch (error) {
+      console.error("Play/pause error:", error);
+    } finally {
+      setIsControlling(false);
+    }
+  };
+
+  const handlePrevious = async () => {
+    setIsControlling(true);
+    try {
+      await previousTrack();
+    } catch (error) {
+      console.error("Previous track error:", error);
+    } finally {
+      setIsControlling(false);
+    }
+  };
+
+  const handleNext = async () => {
+    setIsControlling(true);
+    try {
+      await nextTrack();
+    } catch (error) {
+      console.error("Next track error:", error);
+    } finally {
+      setIsControlling(false);
+    }
+  };
+
   // Loading state for initial load
   if (isLoading) {
     return (
@@ -246,7 +504,18 @@ const Content: FC = () => {
   }
 
   // Determine if any operation is in progress
-  const isAnyOperationLoading = isToggling || isTogglingAutostart || isRestarting;
+  const isAnyOperationLoading = isToggling || isRestarting;
+
+  // Show settings page if navigated there
+  if (showSettings) {
+    return (
+      <SettingsPage
+        onBack={() => setShowSettings(false)}
+        serviceStatus={status}
+        onStatusRefresh={refreshStatus}
+      />
+    );
+  }
 
   return (
     <>
@@ -270,7 +539,7 @@ const Content: FC = () => {
               </div>
             </div>
           </PanelSectionRow>
-        ) : nowPlaying?.track ? (
+        ) : nowPlaying?.track?.name ? (
           <>
             <PanelSectionRow>
               <div style={{ display: "flex", gap: "12px", alignItems: "center", padding: "8px 0" }}>
@@ -286,10 +555,10 @@ const Content: FC = () => {
                     {nowPlaying.track.name}
                   </div>
                   <div style={{ color: "#888", fontSize: "12px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {nowPlaying.track.artists.join(", ")}
+                    {nowPlaying.track.artists?.join(", ") || "Unknown Artist"}
                   </div>
                   <div style={{ color: "#666", fontSize: "11px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {nowPlaying.track.album}
+                    {nowPlaying.track.album || "Unknown Album"}
                   </div>
                 </div>
               </div>
@@ -341,6 +610,89 @@ const Content: FC = () => {
                   <span>{formatTime(displayPosition)}</span>
                   <span>{formatTime(nowPlaying.track?.duration_ms || 0)}</span>
                 </div>
+              </div>
+            </PanelSectionRow>
+
+            {/* Playback Controls */}
+            <PanelSectionRow>
+              <div style={{
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+                gap: "16px",
+                padding: "8px 0"
+              }}>
+                {/* Previous Button */}
+                <button
+                  onClick={handlePrevious}
+                  disabled={isControlling}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    color: "#b8bcbf",
+                    fontSize: "20px",
+                    cursor: isControlling ? "not-allowed" : "pointer",
+                    padding: "8px",
+                    borderRadius: "50%",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    opacity: isControlling ? 0.5 : 1,
+                    transition: "color 0.2s"
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.color = "#fff"}
+                  onMouseLeave={(e) => e.currentTarget.style.color = "#b8bcbf"}
+                >
+                  <FaStepBackward />
+                </button>
+
+                {/* Play/Pause Button */}
+                <button
+                  onClick={handlePlayPause}
+                  disabled={isControlling}
+                  style={{
+                    background: "#1DB954",
+                    border: "none",
+                    color: "#000",
+                    fontSize: "24px",
+                    cursor: isControlling ? "not-allowed" : "pointer",
+                    padding: "12px",
+                    borderRadius: "50%",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    opacity: isControlling ? 0.5 : 1,
+                    transition: "transform 0.1s"
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.transform = "scale(1.05)"}
+                  onMouseLeave={(e) => e.currentTarget.style.transform = "scale(1)"}
+                >
+                  {nowPlaying.playback_state === "playing" ? <FaPause /> : <FaPlay style={{ marginLeft: "2px" }} />}
+                </button>
+
+                {/* Next Button */}
+                <button
+                  onClick={handleNext}
+                  disabled={isControlling}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    color: "#b8bcbf",
+                    fontSize: "20px",
+                    cursor: isControlling ? "not-allowed" : "pointer",
+                    padding: "8px",
+                    borderRadius: "50%",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    opacity: isControlling ? 0.5 : 1,
+                    transition: "color 0.2s"
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.color = "#fff"}
+                  onMouseLeave={(e) => e.currentTarget.style.color = "#b8bcbf"}
+                >
+                  <FaStepForward />
+                </button>
               </div>
             </PanelSectionRow>
           </>
@@ -407,15 +759,16 @@ const Content: FC = () => {
         </PanelSectionRow>
       )}
 
-      {/* Auto-start Toggle */}
+      {/* Settings Button */}
       <PanelSectionRow>
-        <ToggleField
-          label="Auto-start on boot"
-          description="Start Spotify Connect when Steam Deck boots"
-          checked={status?.enabled ?? false}
-          disabled={isAnyOperationLoading}
-          onChange={handleToggleAutostart}
-        />
+        <ButtonItem
+          layout="below"
+          onClick={() => setShowSettings(true)}
+        >
+          <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <FaCog /> Settings
+          </span>
+        </ButtonItem>
       </PanelSectionRow>
       </PanelSection>
     </>
