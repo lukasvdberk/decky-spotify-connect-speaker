@@ -1,4 +1,5 @@
 # Spotify Connect Speaker for Steam Deck
+![banner pic](./assets/banner.png)
 
 Turn your Steam Deck into a Spotify Connect speaker - stream your music and control playback directly from the Quick Access menu.
 
