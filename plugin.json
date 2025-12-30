@@ -6,6 +6,6 @@
   "publish": {
     "tags": ["music", "media", "mpris"],
     "description": "Turn your Steam Deck into a Spotify Connect speaker - stream your music and control playback directly from the Quick Access menu",
-    "image": "https://opengraph.githubassets.com/1/SteamDeckHomebrew/PluginLoader"
+    "image": "https://raw.githubusercontent.com/lukasvdberk/decky-spotify-connect-speaker/main/assets/banner.png"
   }
 }
