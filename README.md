@@ -20,10 +20,10 @@ Turn your Steam Deck into a Spotify Connect speaker - stream your music and cont
 
 ## Installation
 
-1. Open the Quick Access menu on your Steam Deck
-2. Navigate to the Decky plugin store
-3. Search for "Spotify Connect Speaker"
-4. Click Install
+1. Download the last zip from the github [releases](https://github.com/lukasvdberk/decky-spotify-connect-speaker/releases) page
+2. Open the Quick Access menu on your Steam Deck
+3. Navigate to the Decky plugin settings
+4. And select the option to install from a ZIP file
 
 ## Usage
 
